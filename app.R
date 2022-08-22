@@ -24,36 +24,54 @@ boardgames <- ratings %>%
 ui <- fluidPage(
 
     # Application title
-    titlePanel("Board Game Explorer"),
+    titlePanel(h1("Board Game Explorer", align = "center")),
+    
+  tabsetPanel(type = "tabs",
+              tabPanel("Explore Board Games",
+                       h1("Highest Rated Games")),
+              tabPanel("Compare Games",
+                       sidebarLayout(
+                         sidebarPanel(
+                           
+                           selectizeInput("game1",
+                                          "Select a game to compare",
+                                          choices = c("No game selected", boardgames$primary),
+                                          selected = "No game selected"),
+                           selectizeInput("game2",
+                                          "Select a game to compare",
+                                          choices = c("No game selected", boardgames$primary),
+                                          selected = "No game selected"),
+                           width = 2
+                         ),
+                         mainPanel(
+                           fluidRow(
+                             column(6, 
+                                    
+                                    
+                                    h1(textOutput("game1")),
+                                    h3(textOutput("rank")),
+                                    textOutput("rating"),
+                                    uiOutput("img1")
+                             ),
+                             
+                             column(6,
+                                    h1(textOutput("game2")),
+                                    h3(textOutput("rank2")),
+                                    textOutput("rating2"),
+                                    uiOutput("img2")
+                             )
+                           )
+                         )
+                       )
+                       ),
+              tabPanel("Recommend me a Game",
+                       h1("Recommend")))  
+    
+    
+    )
 
     # Sidebar with a slider input for number of bins 
-    fluidRow(
-        column(5, 
-            selectizeInput("game1",
-                        "Select a game to compare",
-                        choices = c("No game selected", boardgames$primary),
-                        selected = "No game selected"),
-              
-            textOutput("game1"),
-            textOutput("rank"),
-            textOutput("rating"),
-            uiOutput("img1")
-        ),
-
-        # Show a plot of the generated distribution
-        column(5,
-               selectizeInput("game2",
-                              "Select a game to compare",
-                              choices = c("No game selected", boardgames$primary),
-                              selected = "No game selected"),
-               
-               textOutput("game2"),
-               textOutput("rank2"),
-               textOutput("rating2"),
-               uiOutput("img2")
-        )
-    )
-)
+    
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
