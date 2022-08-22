@@ -36,7 +36,8 @@ ui <- fluidPage(
               
             textOutput("game1"),
             textOutput("rank"),
-            textOutput("rating")
+            textOutput("rating"),
+            uiOutput("img1")
         ),
 
         # Show a plot of the generated distribution
@@ -48,7 +49,8 @@ ui <- fluidPage(
                
                textOutput("game2"),
                textOutput("rank2"),
-               textOutput("rating2")
+               textOutput("rating2"),
+               uiOutput("img2")
         )
     )
 )
@@ -56,6 +58,13 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
 
+  img1_url <- reactive({
+    boardgames %>%
+      filter(primary == input$game1) %>%
+      select(thumbnail) %>% unlist(.)
+  })
+  
+  
   year <- reactive({
     boardgames %>%
       filter(primary == input$game1) %>%
@@ -86,6 +95,13 @@ server <- function(input, output) {
   
   
   # game 2
+  
+  img2_url <- reactive({
+    boardgames %>%
+      filter(primary == input$game2) %>%
+      select(thumbnail) %>% unlist(.)
+  })
+  
   year2 <- reactive({
     boardgames %>%
       filter(primary == input$game2) %>%
@@ -110,13 +126,17 @@ server <- function(input, output) {
       filter(primary == input$game2) %>%
       select(users_rated) %>% unlist(.)
   })
+  
   #outputs
+  
+  output$img1 <- renderUI({
+    tags$img(src = img1_url())
+  })
   
   output$game1 <- renderText({
     if(input$game1 != "No game selected"){
       paste0(input$game1, " (", year(), ")")
     }
-    
   }
   )
   
@@ -133,6 +153,10 @@ server <- function(input, output) {
   })
   
   #game 2
+  
+  output$img2 <- renderUI({
+    tags$img(src = img2_url())
+  })
   
   output$game2 <- renderText({
     if(input$game2 != "No game selected"){
