@@ -1,0 +1,38 @@
+---
+title: "EDA"
+format: html
+editor: visual
+---
+
+## Intro
+
+I run all my data here before putting it into the app to make sure everything is in order
+
+## Data Wrangling
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| include: false
+library(tidyverse)
+ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/ratings.csv')
+details <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/details.csv')
+
+```
+
+Code to clean all columns with `boardgame` in its name.
+
+```{r}
+df <- data.frame(lapply(details[,12:19], function(x) str_remove_all(x,"[^[:^punct:],]")))
+details <- details %>%
+  select(!starts_with("boardgame")) %>%
+  cbind(., df)
+```
+
+Joining the two datasets
+
+```{r}
+boardgames <- ratings %>%
+  select(id, average, users_rated, thumbnail) %>%
+full_join(., details, by = "id")
+```
