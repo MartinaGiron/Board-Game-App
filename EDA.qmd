@@ -15,6 +15,7 @@ When you click the **Render** button a document will be generated that includes 
 ```{r}
 #| include: false
 library(tidyverse)
+library(plotly)
 ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/ratings.csv')
 details <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/details.csv')
 
@@ -35,4 +36,76 @@ Joining the two datasets
 boardgames <- ratings %>%
   select(id, average, users_rated, thumbnail) %>%
 full_join(., details, by = "id")
+```
+
+Combining min+max players and time, adding "+" to minimum age
+
+```{r}
+boardgames %>%
+  transmute(players = ifelse(minplayers == maxplayers, minplayers, paste(minplayers, "-", maxplayers)),
+         play_time = ifelse(minplaytime == maxplaytime, minplaytime, paste(minplaytime, "-", maxplaytime)),
+         rec_age = paste0(minage, "+"))
+```
+
+```{r}
+x <- boardgames$boardgamecategory[1:5]
+# split x on the letter e
+category_list <- str_trim(unlist(strsplit(boardgames$boardgamecategory, ","))) %>% unique() 
+category_list <- subset(category_list, !is.na(category_list))
+```
+
+# Explore 
+
+## Board Game Preview
+
+```{r}
+shorten <- boardgames %>%
+  select(description, starts_with("boardgame"),thumbnail) %>%
+  rowwise() %>%
+  mutate_all(function(x) ifelse(str_length(x)>50, paste0(substr(x, 1, 100), "..."), x))
+
+remainder <- boardgames %>%
+  select(-thumbnail, -description, -starts_with("boardgame"))
+
+boardgames_preview <- cbind(remainder, shorten)
+boardgames_preview <- boardgames_preview %>%
+  rename(name = primary,
+         average_rating = average) %>%
+  relocate(name, .before = id) %>%
+  relocate(yearpublished, .after = name) %>%
+  relocate(description, .after = yearpublished) %>%
+  relocate(average_rating, .after = description)
+
+write_csv(boardgames_preview, "Boardgame Preview.csv")
+
+```
+
+
+
+The dataset contains boardgames even up to thousands of years old. The oldest boardgame here is `r boardgames %>% filter(yearpublished == min(boardgames$yearpublished, na.rm = T)) %>% select(primary) %>% unlist()`, published in the year `r str_remove(min(boardgames$yearpublished, na.rm = T), "-")` B.C. Most games, however, were published in the last hundred years. Notably, the year 1950 saw an exponential growth in the number of boardgames produced, and the pattern continues today.
+
+```{r}
+years_100 <- boardgames %>%
+  filter(yearpublished > 1900) %>%
+ggplot(., aes(x = yearpublished)) +
+  geom_bar() +
+  labs(x = "Year",
+       y = "Frequency",
+       title = "Number of boardgames published since 1900") +
+  scale_x_continuous(limits = c(1900, 2023))
+
+ggplotly(years_100)
+
+```
+Users were generally generous with rating the games. Put together, all boardgames have an average score of `r round(mean(boardgames$average, na.rm = T), 2)`. 
+You might also notice that the graph resembles the bell-shaped normal distribution. This is a natural consequence of the fact that our sample size is very large.
+
+```{r}
+games_ave <- ggplot(boardgames, aes(x = average)) +
+  geom_bar() +
+  labs(x = "Frequency",
+       y = "Average Rating",
+       title = "Average Rating for Each Boardgame")
+
+ggplotly(games_ave)
 ```
