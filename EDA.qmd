@@ -16,6 +16,8 @@ When you click the **Render** button a document will be generated that includes 
 #| include: false
 library(tidyverse)
 library(plotly)
+library(tidytext)
+library(treemapify)
 ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/ratings.csv')
 details <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/details.csv')
 
@@ -49,7 +51,6 @@ boardgames %>%
 
 ```{r}
 x <- boardgames$boardgamecategory[1:5]
-# split x on the letter e
 category_list <- str_trim(unlist(strsplit(boardgames$boardgamecategory, ","))) %>% unique() 
 category_list <- subset(category_list, !is.na(category_list))
 ```
@@ -80,24 +81,29 @@ write_csv(boardgames_preview, "Boardgame Preview.csv")
 
 ```
 
-
+### Boardgames have been on the rise in the past 50 years.
 
 The dataset contains boardgames even up to thousands of years old. The oldest boardgame here is `r boardgames %>% filter(yearpublished == min(boardgames$yearpublished, na.rm = T)) %>% select(primary) %>% unlist()`, published in the year `r str_remove(min(boardgames$yearpublished, na.rm = T), "-")` B.C. Most games, however, were published in the last hundred years. Notably, the year 1950 saw an exponential growth in the number of boardgames produced, and the pattern continues today.
 
 ```{r}
 years_100 <- boardgames %>%
   filter(yearpublished > 1900) %>%
-ggplot(., aes(x = yearpublished)) +
-  geom_bar() +
+  count(yearpublished) %>%
+ggplot(., aes(x = yearpublished, y = n)) +
+  geom_line() +
   labs(x = "Year",
        y = "Frequency",
        title = "Number of boardgames published since 1900") +
-  scale_x_continuous(limits = c(1900, 2023))
+  scale_x_continuous(limits = c(1900, 2023)) 
 
 ggplotly(years_100)
 
 ```
-Users were generally generous with rating the games. Put together, all boardgames have an average score of `r round(mean(boardgames$average, na.rm = T), 2)`. 
+
+### Users gave generous ratings to the games
+
+
+Users generally gave high scores to the games. Put together, all boardgames have an average score of `r round(mean(boardgames$average, na.rm = T), 2)`. 
 You might also notice that the graph resembles the bell-shaped normal distribution. This is a natural consequence of the fact that our sample size is very large.
 
 ```{r}
@@ -109,3 +115,95 @@ games_ave <- ggplot(boardgames, aes(x = average)) +
 
 ggplotly(games_ave)
 ```
+### Card games, war games, fantasy games, and party games were the most popular categories
+
+
+Boardgames in the dataset may have a category associated to them, such as "party game" or "puzzle". Most games have just 1 or 2. But others have up to 13 categories associated with them. There are a total of `r length(category_list)` unique categories.
+
+
+```{r}
+category_tokenized <- boardgames %>%
+  unnest_tokens(category, boardgamecategory, token = "regex", pattern = ",") %>%
+  mutate(category = str_trim(category)) %>%
+  select(primary, average, category)
+
+count_category <- category_tokenized %>%
+  count(category, sort = T) %>%
+  mutate(labs = paste0(category, "\n", round(n/sum(nrow(boardgames))*100,2),"%"))
+
+
+```
+
+### Newer board games have higher average ratings, but the opposite isn't necessarily true for much older games
+
+Reviews on older games are polarizing. This is largely because the years between 1900-1950 saw only few games published. This small count resulted in the erratic movement of the year's average rating. As the number of boardgames published per year increased, the trend in the average rating became more apparent: We see a consistent rise in the average ratings for newer games.
+```{r}
+rating_year <- boardgames %>%
+  group_by(yearpublished) %>%
+  summarize(average_year = mean(average), count = n()) %>% 
+  filter(yearpublished > 1900) %>%
+  arrange(yearpublished) %>%
+  ggplot(., aes(x = yearpublished, y = average_year, color = count, size = count))+
+    geom_point()  +
+  labs(x = "Year", 
+       y = "Rating",
+       title = "Average Ratings of Boardgames by Year Published")
+
+ggplotly(rating_year)
+```
+
+Let's see what are the most popular categories of boardgames.
+```{r}
+ggplot(count_category, aes(area = n, fill = category, label = labs)) +
+  geom_treemap() +
+  geom_treemap_text(grow = F, color = "white", place = "topleft", reflow = F,
+                    padding.x = grid::unit(3, "mm"),
+                    padding.y = grid::unit(3, "mm")
+                    ) +
+    theme(legend.position = "none") +
+  labs(title = "Percentage of Boardgames under each Category")
+
+```
+
+### But interestingly, these popular boardgames have low average ratings
+
+The following graph shows the relationship of category popularity (measured in number of boardgames in that category) and the average rating of the boardgames in that category. For the most part, the category averages are close to the overall average. However, our outlier categories with extremely many and extremely few boardgames in them show a different pattern. Fan expansion is the highest rated category, but that's only because it only consists of one boardgame. Meanwhile, we have many card games, fantasy games, and war games, but they have low average ratings. This may be because the genre is so popular, it is diluted with low-quality products.
+```{r}
+n_count <- category_tokenized %>%
+  filter(!is.na(category)) %>%
+  group_by(category) %>%
+  summarize(category_average = mean(average), n = n()) 
+
+pop_ave_graph <- ggplot(n_count, aes(y = category_average, x = n, fill = category, label = category)) +
+    geom_point() +
+    labs(x = "Number of Boardgames Under the Category",
+         y = "Average Score of Category",
+         title = "Relationship of Category Popularity and Rating") +
+    geom_text(data=subset(n_count, 
+                          n > 2000 | category_average > 9),
+              vjust = 2) +
+    scale_x_continuous(limits = c(0, 8000)) +
+  theme(legend.position = "none",
+        panel.grid = element_blank()
+        )
+
+ggplotly(pop_ave_graph) %>%
+  style(textposition = "top right")
+```
+# Most games have up to expansions
+
+Expansions are supplementary materials that can be added to a base board game to enhance gameplay. For example, for card games, this could be additional cards. Expansions are fairly uncommon. But those that do have them mostly have up to 4. The boardgame `r boardgames_expansion %>% filter(n_expansion > 500) %>% select(primary) %>% unlist()` takes the prize for most expansions, at a whopping `r max(boardgames_expansion$n_expansion, na.rm = T)`.
+```{r}
+boardgames_expansion <- boardgames %>%
+  mutate(n_expansion = 1+str_count(boardgameexpansion, ",")) %>%
+  mutate(n_expansion_binned = ifelse(n_expansion > 4, "5+", n_expansion))
+expansion_plot <- ggplot(boardgames_expansion, aes(n_expansion_binned)) +
+    geom_bar() +
+  labs(y = "Number of Boardgames",
+       x = "Number of Expansions",
+       title = "Number of boardgames with each number of expansions")
+
+ggplotly(expansion_plot)
+
+```
+

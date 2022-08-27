@@ -11,6 +11,7 @@ library(shiny)
 library(tidyverse)
 library(DT)
 library(plotly)
+
 details <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/details.csv')
 ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-01-25/ratings.csv')
 df <- data.frame(lapply(details[,12:19], function(x) str_remove_all(x,"[^[:^punct:],]")))
@@ -26,6 +27,31 @@ boardgames_preview <- read_csv("Boardgame Preview.csv")
 category_list <- str_trim(unlist(strsplit(boardgames$boardgamecategory, ","))) %>% unique() 
 category_list <- subset(category_list, !is.na(category_list))
 
+category_tokenized <- boardgames %>%
+  unnest_tokens(category, boardgamecategory, token = "regex", pattern = ",") %>%
+  mutate(category = str_trim(category)) %>%
+  select(primary, average, category)
+
+count_category <- category_tokenized %>%
+  count(category, sort = T) %>%
+  mutate(labs = paste0(category, "\n", round(n/sum(nrow(boardgames))*100,2),"%"))
+
+n_count <- category_tokenized %>%
+  filter(!is.na(category)) %>%
+  group_by(category) %>%
+  summarize(category_average = mean(average), n = n()) 
+
+pop_ave_plot <- ggplot(n_count, aes(y = category_average, x = n, fill = category, label = category)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(x = "Number of Boardgames Under the Category",
+       y = "Average Score of Category",
+       title = "Relationship of Category Popularity and Rating") +
+  geom_text(data=subset(n_count, 
+                        n > 2000 | category_average > 9),
+            vjust = 2) +
+  scale_x_continuous(limits = c(0, 8000))
+
 # Define UI for application that draws a histogram
 ui <- fluidPage(
   tags$head(
@@ -36,14 +62,16 @@ ui <- fluidPage(
       h3 {font - weight: 300;text-align:center;}
       p {font - weight: 300;font-family: 'Open Sans'}
       .center {display: block;margin-left: auto;margin-right: auto;width: 90%;}
-      .table-class {display: block;margin-left: auto;margin-right: auto;width: 70%;}"
+      .table-class {display: block;margin-left: auto;margin-right: auto;width: 70%;}
+      body {background-color: #f2f4f5;
+}"
     ))
   ),
     # Application title
-    titlePanel(span(
+    titlePanel(div(
       img(src="LOGO Main.png", 
           width="50px"),
-                    "Board Game Explorer",)
+                    "Board Game Explorer")
                ),
 #### UI: Explore ####   
   tabsetPanel(type = "tabs",
@@ -67,8 +95,11 @@ ui <- fluidPage(
                                           "boardgames from", 
                                           length(category_list),
                                           "different categories. 
-                                 We also have information on their descriptions, age ratings, and user ratings, among others.")))
-                         )
+                                 We also have information on their descriptions, age ratings, and user ratings, among others."))),
+                           br(),
+                           
+                         ),
+                         hr()
                        )
 
                        ,
@@ -79,7 +110,9 @@ ui <- fluidPage(
                            p("Tip: Sort the data using the arrows next to each column head and filter using the search bar."),
                            DT::dataTableOutput("preview_table"),
                            br(),
-                           h3("Now let's see if we can find any trends in our data"),
+                           hr(),
+                           br(),
+                           h1("Now let's see if we can find any trends in our data"),
                            br(),
                            h4("Boardgames have been on the rise in the past 50 years."),
                           
@@ -89,7 +122,7 @@ ui <- fluidPage(
                              column(6,
                                     br(),
                                     br(),
-                                    p(paste("The dataset contains boardgames up to thousands of years old. The oldest boardgame here is ",
+                                    p(paste("Boardgames have been around for thousands of years. The oldest one in this dataset is named ",
                                             boardgames %>%
                                               filter(yearpublished == min(boardgames$yearpublished, na.rm = T)) %>% 
                                               select(primary) %>% unlist(), "which was published in the year",
@@ -98,7 +131,8 @@ ui <- fluidPage(
                                    Notably, the year 1950 saw an exponential growth in the number of boardgames produced, 
                                    and the pattern continues today."))) 
                            ),
-                           h4("Users gave generous ratings to the games"),
+                           br(),
+                           h4("And they're well loved by their players"),
                            fluidRow(
                              column(6,
                                     plotlyOutput("game_ave")),
@@ -110,9 +144,41 @@ ui <- fluidPage(
                                              round(mean(boardgames$average, na.rm = T), 2),
                                              ". You might also notice that the graph resembles the bell-shaped normal distribution. 
                                           This is a natural consequence of the fact that our sample size is very large.")))
+                           ),
+                           br(),
+                           h4("Card games, war games, fantasy games, and party games were the most popular categories"),
+                           fluidRow(
+                             column(6,
+                                    plotOutput("count_category")),
+                             column(6,
+                                    br(),
+                                    br(),
+                                    p(paste0("Boardgames in the dataset may have a category associated to them, such as 'party game' or 'puzzle'. 
+                                            Most games have just 1 or 2. 
+                                            But others have up to 13 categories associated with them. 
+                                            There are a total of ",
+                                            length(category_list), 
+                                            " unique categories. Let's see what are the most popular categories of boardgames."))
+                                    )
+                           ),
+                           br(),
+                           h4("But interestingly, these popular boardgames have low average ratings"),
+                           fluidRow(
+                             column(6,
+                                    plotlyOutput("pop_ave")),
+                             column(6,
+                                    br(),
+                                    br(),
+                                    p("The following graph shows the relationship of category popularity 
+                                    (measured in number of boardgames in that category) and the average rating of the boardgames in that category. 
+                                    For the most part, the category averages are close to the overall average. 
+                                    However, our outlier categories with extremely many and extremely few boardgames in them show a different pattern. 
+                                    Fan expansion is the highest rated category, but that's only because it only consists of one boardgame. 
+                                    Meanwhile, we have many card games, fantasy games, and war games, but they have low average ratings. 
+                                      This may be because the genre is so popular, it is diluted with low-quality products.")))
                            )
 
-                          )  
+                            
                        
                        ),
 #### UI: Compare ####
@@ -170,17 +236,18 @@ ui <- fluidPage(
                                     uiOutput("description2")
                              )
                            )
-                         )
-                       )
-                       ),
+                         )))
+                       
+                       ,
               tabPanel("Recommend me a Game",
-                       h1("Recommend"))),
+                       h1("Recommend"))
+        )
   
   
   
-    
-    
     )
+    
+    
 
     # Sidebar with a slider input for number of bins 
     
@@ -208,12 +275,13 @@ output$preview_table <- renderDataTable({
 output$game_time <- renderPlotly(
   years_100 <- boardgames %>%
     filter(yearpublished > 1900) %>%
-    ggplot(., aes(x = yearpublished)) +
-    geom_bar() +
+    count(yearpublished) %>%
+    ggplot(., aes(x = yearpublished, y = n)) +
+    geom_line() +
     labs(x = "Year",
          y = "Frequency",
          title = "Number of boardgames published since 1900") +
-    scale_x_continuous(limits = c(1900, 2023))
+    scale_x_continuous(limits = c(1900, 2023)) 
 
 )
 
@@ -225,7 +293,20 @@ output$game_ave <- renderPlotly(
          title = "Average Rating for Each Boardgame")
 )
   
+output$count_category <- renderPlot(
+  ggplot(count_category, aes(area = n, fill = category, label = labs)) +
+    geom_treemap() +
+    geom_treemap_text(grow = F, color = "white", place = "topleft", reflow = F,
+                      padding.x = grid::unit(3, "mm"),
+                      padding.y = grid::unit(3, "mm")
+    ) +
+    theme(legend.position = "none") +
+    labs(title = "Percentage of Boardgames under each Category")
+)
 
+output$pop_ave <- renderPlotly(
+  pop_ave_plot %>% style(textposition = "top right")
+)
   
 #### Server: Compare ####
 	
@@ -326,7 +407,7 @@ output$game_ave <- renderPlotly(
     boardgames %>%
       filter(primary == input$game2) %>%
       transmute(players = ifelse(minplayers == maxplayers, minplayers, paste0(minplayers, "-", maxplayers)),
-                play_time = ifelse(minplaytime == maxplaytime, minplaytime, paste(minplaytime, "-", maxplaytime)),
+                play_time = ifelse(minplaytime == maxplaytime, minplaytime, paste0(minplaytime, "-", maxplaytime)),
                 rec_age = paste0(minage, "+")) %>%
       unlist(.)
   })
